@@ -6,7 +6,6 @@ y=H_{c2}(T)
 1. Kim, S. et al. Spin-orbit coupling induced enhancement of upper critical field in superconducting A15 single crystals. Journal of Alloys and Compounds 1037, 182350 (2025).
 
 """
-#%%
 from mpmath import nsum
 import numpy as np
 
@@ -20,28 +19,19 @@ def residual(x, t, t_c, slope, field_norm, field_orb, nu_range=(-1e4, 1e4)):
     # x[0]: alpha(maki param.)
     # x[1]: lambda_so (l_so)
 
-    return lhs(t)-rhs(field_norm, slope, x[0], t, x[1], t_c, field_orb, nu_range=nu_range)
+    return lhs(t)-rhs(field_norm, slope, x[0], t, x[1], t_c, field_orb)
 
-def residual_exp(x, t, t_c, slope, field_norm, field_orb, nu_range=(-1e4, 1e4)):
-    return np.divide(1.0, t)-np.exp(rhs(field_norm, slope, x[0], t, x[1], t_c, field_orb, nu_range=nu_range))
-
-def residual_exp_raw(x, t, t_c, slope, field, nu_range=(-1e4, 1e4)):
+def residual_raw_slopefit(x, t, t_c, field_raw):
     """
-    field should be not normalized! normalized = H/H_orb
+    set field_orb=1.0, because only the hbar() depends on it, multiplied to field_raw
     """
-    return np.divide(1.0, t)-np.exp(rhs(field, slope, x[0], t, x[1], t_c, field_orb=np.array([1.0]*len(field)), nu_range=nu_range))
+    return lhs(t)-rhs(field_raw, x[2], x[0], t, x[1], t_c, field_orb=np.array([1.0]*len(t)))
 
-def residual_raw_slopefit(x, t, t_c, field, nu_range=(-1e4, 1e4)):
-    return lhs(t)-rhs(field, x[2], x[0], t, x[1], t_c, field_orb=np.array([1.0]), nu_range=nu_range)
+def residual_for_plot(x, t, t_c, slope, alpha, l_so, field_orb):
+    return lhs(t)-rhs(x[0], slope, alpha, t, l_so, t_c, field_orb)
 
-def residual_exp_raw_slopefit(x, t, t_c, field, nu_range=(-1e4, 1e4)):
-    return np.divide(1.0, t)-np.exp(rhs(field, x[2], x[0], t, x[1], t_c, field_orb=np.array([1.0]), nu_range=nu_range))
-    
-def residual_for_plot(x, t, t_c, slope, alpha, l_so, field_orb, nu_range=(-1e4, 1e4)):
-    return lhs(t)-rhs(x[0], slope, alpha, t, l_so, t_c, field_orb, nu_range=nu_range)
-
-def residual_exp_for_plot(x, t, t_c, slope, alpha, l_so, field_orb, nu_range=(-1e4, 1e4)):
-    return np.divide(1.0,t)-np.exp(rhs(x[0], slope, alpha, t, l_so, t_c, field_orb, nu_range=nu_range))
+#def residual_exp_for_plot(x, t, t_c, slope, alpha, l_so, field_orb, nu_range=(-1e4, 1e4)):
+#    return np.divide(1.0,t)-np.exp(rhs(x[0], slope, alpha, t, l_so, t_c, field_orb))
 
 def lhs(t):
     return np.log(np.divide(1.0, t))
@@ -61,21 +51,30 @@ def make_curl_bracket_for_nsum(field, slope, alpha, t, l_so, t_c, field_orb):
         return curl_bracket(j, field, slope, alpha, t, l_so, t_c, field_orb)
     return curl_bracket_for_nsum
     
-def ___rhs(field, slope, alpha, t, l_so, t_c, field_orb, nu_range=None):
+def rhs(field, slope, alpha, t, l_so, t_c, field_orb):
     """
     summation using mpmath.nsum
     """
     #if isinstance(t, np.ndarray):
     sums=[]
-    for i in range(len(t)):
-        new_curl_bracket=make_curl_bracket_for_nsum(field[i], slope[i], alpha, t[i], l_so, t_c[i], field_orb[i])
-        sums.append(nsum(new_curl_bracket, [-np.inf, np.inf]))
+    if not isinstance(t, np.ndarray):
+        new_curl_bracket=make_curl_bracket_for_nsum(field, slope, alpha, t, l_so, t_c, field_orb)
+        return float(str(nsum(new_curl_bracket, [-np.inf, np.inf])))
+    elif isinstance(slope, np.ndarray):
+        for i in range(len(t)):
+            new_curl_bracket=make_curl_bracket_for_nsum(field[i], slope[i], alpha, t[i], l_so, t_c[i], field_orb[i])
+            sums.append(float(str(nsum(new_curl_bracket, [-np.inf, np.inf]))))
+    else:
+        for i in range(len(t)):
+            new_curl_bracket=make_curl_bracket_for_nsum(field[i], slope, alpha, t[i], l_so, t_c[i], field_orb[i])
+            sums.append(float(str(nsum(new_curl_bracket, [-np.inf, np.inf]))))
+    
     return np.array(sums)
     #else:
     #    new_curl_bracket=make_curl_bracket_for_nsum(i, field, slope, alpha, t, l_so, t_c, field_orb)
     #    return nsum(new_curl_bracket, [-np.inf, np.inf])
 
-def rhs(field, slope, alpha, t, l_so, t_c, field_orb, nu_range=(-1e3,1e3)):
+def __rhs(field, slope, alpha, t, l_so, t_c, field_orb, nu_range=(-1e3,1e3)):
     """
     hbar is defined on the paper. not the conventional selection
     """
@@ -181,33 +180,3 @@ class SumInfinity():
 
         return sum+residual_sum
     
-#%%
-if __name__=="__main__":
-    from scipy.optimize import least_squares, shgo
-    import matplotlib.pyplot as plt
-
-    import pandas as pd
-    import numpy as np
-    from sklearn.metrics import r2_score
-    #%%
-    fig5df = pd.read_csv("fig5_flatten.csv")
-    fig5df
-    #%%
-    t=fig5df['T/Tc'].to_numpy()
-    field_norm=fig5df['H/H_orb'].to_numpy()
-    #slope=fig5df['s1_slope'].to_numpy()
-    slope=np.array([1.4]*len(t))
-
-    #field_orb=fig5df['s1_H_orb'].to_numpy()
-    field_orb=np.array([5.1]*len(t))
-
-    #t_c=fig5df['s1_T_c'].to_numpy()
-    t_c=np.array([5.28]*len(t))
-
-
-    ms=(t, t_c, slope, field_norm, field_orb)
-    #%%
-    xs0=[0.6, 0.1]
-    res_lsq=least_squares(residual, xs0, args=ms, bounds=((0.0,0.0), (5.0, 5.0)), verbose=1)
-    #res_lsq=least_squares(whh.residual, xs0, args=ms, bounds=((0.0,0.0), (5.0, 5.0)), gtol=None, ftol=1e-12, verbose=2)
-    print(f"res_lsq.x:{res_lsq.x}")
