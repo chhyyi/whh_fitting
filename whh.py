@@ -22,6 +22,15 @@ def residual(x, t, t_c, slope, field_norm, field_orb, nu_range=(-1e4, 1e4)):
 
 def residual_exp(x, t, t_c, slope, field_norm, field_orb, nu_range=(-1e4, 1e4)):
     return np.divide(1.0, t)-np.exp(rhs(field_norm, slope, x[0], t, x[1], t_c, field_orb, nu_range=nu_range))
+
+def residual_exp_raw(x, t, t_c, slope, field, nu_range=(-1e4, 1e4)):
+    """
+    field should be not normalized! normalized = H/H_orb
+    """
+    return np.divide(1.0, t)-np.exp(rhs(field, slope, x[0], t, x[1], t_c, field_orb=np.array([1.0]*len(field)), nu_range=nu_range))
+
+def residual_exp_raw_slopefit(x, t, t_c, field, nu_range=(-1e4, 1e4)):
+    return np.divide(1.0, t)-np.exp(rhs(field, x[2], x[0], t, x[1], t_c, field_orb=np.array([1.0]), nu_range=nu_range))
     
 def residual_for_plot(x, t, t_c, slope, alpha, l_so, field_orb, nu_range=(-1e4, 1e4)):
     return lhs(t)-rhs(x[0], slope, alpha, t, l_so, t_c, field_orb, nu_range=nu_range)
